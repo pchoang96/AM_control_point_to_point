@@ -60,8 +60,9 @@ void setup() {
 
 void loop() 
 {
-  p_end[0]= 500;
-  p_end[1]= 400;
+
+ p_end[0]=500;
+  p_end[1]=400;
   p_end[2]=0;
   /* calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
   pid_position();
@@ -111,7 +112,7 @@ void calculate_position(double xt,double yt, double pht, double xs, double ys, d
   p_now[2]=pht; //0
   //update error
   lin_error=linear;
-  ang_error=(w - pht);// *180/pi
+  ang_error=(w - pht)*180/pi;
 }
 /*------------------------------------------------------------*/
 void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
@@ -148,7 +149,7 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
 /**--------------------------------------------------------------**/
 void pid_position()
 {
-  if(abs(ang_error)>0.05)
+  if(abs(ang_error)>3.0)
   {
     ang_out = PID_cal(ang_error,ang_pre_error,ang_integral,ang_derivative,ang_Ppart,ang_Ipart,ang_Dpart,p_kP,p_kI,p_kD);
     pid_type = false;
@@ -166,7 +167,7 @@ void pid_position()
       Serial.println((String) "lin_out: " + lin_out);
     }
   }
-  else if (abs(lin_error)<5.0 && abs(ang_error)<0.05)
+  else if (abs(lin_error)<5.0 && abs(ang_error)<3)
   { 
     l_out=0;
     r_out=0;
@@ -218,47 +219,44 @@ void motion(double lin, double phi )
   
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>60) l_set=60;
-  if (r_set>60) r_set=60;
+  if (l_set>45) l_set=45;
+  if (r_set>45) r_set=45;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
-  TCNT1 = 53035;
   calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
   pid_position();
   motion(lin_out,ang_out);
 
-  l_ms = l_p*inv_sampletime*wheels_diameter*pi/wheels_encoder;
-  r_ms = r_p*inv_sampletime*wheels_diameter*pi/wheels_encoder;
   l_error= l_set-abs(l_p);
   r_error= r_set-abs(r_p);
   l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
   r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
+  l_ms = l_d*10;
+  r_ms = r_d*10;
+  
+  if (l_out>= 250) l_out=r_out=250;
+  else if (l_out<100&&l_out>30) {l_out+=10; r_out+=10;}
+  else if (l_out<=30) l_set=r_set=0;
 
-  if (DEBUG)
+    if (DEBUG)
   {  
-    Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]);
-    // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
-    // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
+    //Serial.println((String)  "Position: " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]);
+     //Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
     // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
-    Serial.println((String) "l_vt: "+ l_vt );
-    Serial.println((String) "l_ms : "+ l_ms );
+    // Serial.println((String) "l_ms: "+ l_ms +" r_ms: " + r_ms);
+     Serial.println((String) "l_vt: "+ l_vt);
     // Serial.println((String) "r_vt: " +r_vt);
-    //Serial.println((String)  "l_p: "+l_p + " r_p: "+  r_p);
-    //   Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
-    // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
+    // Serial.println((String)  "l_p: "+l_p + " r_p: "+  r_p);
+     Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
+     Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
     // Serial.println((String) "");
   }
-  
- if (l_out>= 255) l_out=r_out=255;
-// else if (l_out<90 && l_out>=50) l_out=r_out=90;
- 
   pwmOut(l_out,r_out,l_dir,r_dir);
   l_p=0;
   r_p=0;
   TCNT1 = 40535;
-
 }
 /**--------------------------------------------------------------**/
