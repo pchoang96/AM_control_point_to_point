@@ -15,21 +15,28 @@ bool l_dir=clkw, r_dir=clkw;
 /**----------------encoder parametter--------------------------------------------------**/
 double l_p=0,r_p=0;
 double l_d,r_d;
-//  left pules, left pre pulse, lef direction,....
+//  left pulses, left pre pulses, lef direction,....
 /**--------------pid velocity calculation-------------------------------------------**/
-volatile double  l_error=0.0,l_pre_error=0.0,l_integral=0.0,l_derivative=0.0,l_Ppart=0.0,l_Ipart=0.0,l_Dpart=0.0,l_out,l_set,l_ms;
-double const l_kP = 0.33, l_kI=6.53 ,l_kD = 0.004;
-volatile double  r_error=0.0,r_pre_error=0.0,r_integral=0.0,r_derivative=0.0,r_Ppart=0.0,r_Ipart=0.0,r_Dpart=0.0,r_out,r_set,r_ms;
-double const r_kP = 0.33, r_kI=0.53,r_kD = 0.004;
+volatile double  l_error=0.0,l_pre_error=0.0,l_integral=0.0,l_derivative=0.0,l_Ppart=0.0,l_Ipart=0.0,l_Dpart=0.0,l_out,l_set,l_ms,l_pre_out=0;
+double const l_kP = 0.33, l_kI=7.53 ,l_kD = 0.004;
+volatile double  r_error=0.0,r_pre_error=0.0,r_integral=0.0,r_derivative=0.0,r_Ppart=0.0,r_Ipart=0.0,r_Dpart=0.0,r_out,r_set,r_ms,r_pre_out=0;
+double const r_kP = 0.33, r_kI=7.53,r_kD = 0.004;
 /**----------------pid position calculator------------------------------------------**/
+/* pid for motor:
+ * period time: 20 ms
+ * peek time: 400 ms
+ * max speed (setting): 15
+*/
+
+
 double p_org[]={0.0,0.0,0.0}, p_now[]= {0.0,0.0,0.0}, p_end[]={0.0,0.0,0.0}; //{x,y,phi}
 double lin_error=0.0,lin_pre_error=0.0,lin_integral=0.0,lin_derivative=0.0,lin_Ppart=0.0,lin_Ipart=0.0,lin_Dpart=0.0,lin_out,lin_set;
-double const p_kP =0.33 ,p_kI=6.53,p_kD = 0.0;
+double const p_kP =0.33 ,p_kI=6.53,p_kD = 0.004;
 volatile double ang_error=0.0,ang_pre_error=0.0,ang_integral=0.0,ang_derivative=0.0,ang_Ppart=0.0,ang_Ipart=0.0,ang_Dpart=0.0,ang_out,ang_set;
 volatile bool  pid_type=0; //0 for angle, 1 for linear 
 /**----------------car parameter---------------------**/
 const double pi=3.1415;
-const double sampletime = 0.1, inv_sampletime = 1/sampletime;
+const double sampletime = 0.02, inv_sampletime = 1/sampletime;
 const double wheels_distance = 207, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 260;// mm
 const double wheel_ticLength = wheels_diameter*pi/wheels_encoder;//0.23mm
 const double wheel_ticAngle = 2*pi/(wheels_distance*pi/wheel_ticLength);//0.0022 rad
@@ -53,17 +60,20 @@ void setup() {
   TCCR1B = 0;
   TIMSK1 = 0;
   TCCR1B |= (1 << CS11) | (1 << CS10);    // prescale = 64 4us per pulse
-  TCNT1 = 40535; //(25000*4)=100ms
+  TCNT1 = 60535; //(12500*4)=50ms
   TIMSK1 |= (1 << TOIE1);                  // Overflow interrupt enable 
   sei();                                  // enable all interrupt
 }
 
 void loop() 
 {
+/*
+  l_set = 15;
+  r_set = 15;
+  l_dir = clkw;
+  r_dir= clkw;
+  delay(100);*/
 
- p_end[0]=500;
-  p_end[1]=400;
-  p_end[2]=0;
   /* calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
   pid_position();
   motion(lin_out,ang_out);
@@ -81,6 +91,14 @@ void loop()
     Serial.println((String) "");
    delay(2000);
    */
+   if (i==10)
+   {
+      cli();
+      pid_position();
+      motion(lin_out,ang_out);
+      l_ms = l_p*inv_sampletime*wheels_diameter*pi/wheels_encoder;  
+      sei();
+   }
 }
 
 void encoder_1()
@@ -107,12 +125,12 @@ void calculate_position(double xt,double yt, double pht, double xs, double ys, d
   w=atan2((ys-yt),(xs-xt));
   linear=sqrt((xs-xt)*(xs-xt)+(ys-yt)*(ys-yt));
   //update position
-  p_now[0]=xt; //0
-  p_now[1]=yt; //0
-  p_now[2]=pht; //0
+  p_now[0]=xt;
+  p_now[1]=yt;
+  p_now[2]=pht;
   //update error
   lin_error=linear;
-  ang_error=(w - pht)*180/pi;
+  ang_error=(w - pht);//*180/pi
 }
 /*------------------------------------------------------------*/
 void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
@@ -131,7 +149,7 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
   else if(Ldir==c_clkw && Rdir==c_clkw)
   {
     analogWrite(M1_p,Rpwm); digitalWrite(M1_l,0);
-    analogWrite(M2_p,Lpwm); digitalWrite(M2_l,0);  
+    analogWrite(M2_p,Lpwm); digitalWrite(M2_l,0) ;  
   }
 
   else if(Ldir==clkw && Rdir==c_clkw)
@@ -149,25 +167,25 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
 /**--------------------------------------------------------------**/
 void pid_position()
 {
-  if(abs(ang_error)>3.0)
+  if(abs(ang_error)>0.09)
   {
     ang_out = PID_cal(ang_error,ang_pre_error,ang_integral,ang_derivative,ang_Ppart,ang_Ipart,ang_Dpart,p_kP,p_kI,p_kD);
     pid_type = false;
     if (DEBUG)
     {
-      Serial.println((String) "ang_out: " + ang_out);
+      Serial.println((String) "ang_error: " + ang_error);
     }
   }
-  else if (abs(lin_error)>5.0)
+  else if (abs(lin_error)>10)
   { 
     lin_out = PID_cal(lin_error,lin_pre_error,lin_integral,lin_derivative,lin_Ppart,lin_Ipart,lin_Dpart,p_kP,p_kI,p_kD);
     pid_type = true;
     if (DEBUG)
     {
-      Serial.println((String) "lin_out: " + lin_out);
+      Serial.println((String) "lin_error: " + lin_error);
     }
   }
-  else if (abs(lin_error)<5.0 && abs(ang_error)<3)
+  else if (abs(ang_error)<0.09 && abs(lin_error)<10)
   { 
     l_out=0;
     r_out=0;
@@ -216,47 +234,49 @@ void motion(double lin, double phi )
   else l_dir =c_clkw;      //backhead
   if (r_v>=0) r_dir = clkw;
   else r_dir =c_clkw;
-  
+
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>45) l_set=45;
-  if (r_set>45) r_set=45;
+  if (l_set>15) l_set=15;
+  if (r_set>15) r_set=15;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
+  i++;
   calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
-  pid_position();
-  motion(lin_out,ang_out);
-
   l_error= l_set-abs(l_p);
   r_error= r_set-abs(r_p);
+  if (l_error>=-1 && l_error<=1) l_error=0;
+  if (r_error>=-1 && r_error<=1) r_error=0;
   l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
   r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
-  l_ms = l_d*10;
-  r_ms = r_d*10;
-  
-  if (l_out>= 250) l_out=r_out=250;
-  else if (l_out<100&&l_out>30) {l_out+=10; r_out+=10;}
-  else if (l_out<=30) l_set=r_set=0;
 
-    if (DEBUG)
+  if (DEBUG)
   {  
-    //Serial.println((String)  "Position: " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]);
-     //Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
+    //Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]);
+    // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
+    // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
     // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
-    // Serial.println((String) "l_ms: "+ l_ms +" r_ms: " + r_ms);
-     Serial.println((String) "l_vt: "+ l_vt);
-    // Serial.println((String) "r_vt: " +r_vt);
-    // Serial.println((String)  "l_p: "+l_p + " r_p: "+  r_p);
-     Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
-     Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
+    //Serial.println((String) "l_vt: "+ l_vt + " r_vt: " +r_vt);
+    // Serial.println((String) " l_ms : "+ l_ms );
+    Serial.println((String)  "l_p: "+l_p + " r_p: "+  r_p);
+    // Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
+    // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
+    //Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
     // Serial.println((String) "");
   }
+  
+  if (l_out>= 255) l_out = 255;
+  //else if (l_out>10 && l_out<90) l_out+=10;
+  if (r_out>= 255) r_out = 255;
+ // else if (r_out>10 && r_out<90) r_out+=10;
+
+
   pwmOut(l_out,r_out,l_dir,r_dir);
   l_p=0;
   r_p=0;
-  TCNT1 = 40535;
+  TCNT1 = 60535;
 }
 /**--------------------------------------------------------------**/
