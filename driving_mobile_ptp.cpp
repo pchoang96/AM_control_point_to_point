@@ -239,16 +239,16 @@ void motion(double lin, double phi )
   
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>15) l_set=15;
-  else if (l_set<5 && l_set>0) l_set =5;
-  if (r_set>15) r_set=15;
-  else if (r_set<5 && r_set>0) r_set =5;
+  if (l_set>20) l_set=20;
+  else if (l_set<6 && l_set>0) l_set =6;
+  if (r_set>20) r_set=20;
+  else if (r_set<6 && r_set>0) r_set =6;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
-  i++;
+  
   if(!wait_a_time)
   {
     calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
@@ -261,10 +261,17 @@ ISR(TIMER1_OVF_vect)
     if (r_error>=-1 && r_error<=1) r_error=0;
     l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
     r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
+    if (l_out>= 255) l_out = 255;
+ //else if (l_out>10 && l_out<90) l_out+=10;
+  if (r_out>= 255) r_out = 255;
+//else if (r_out>10 && r_out<90) r_out+=10;
+  pwmOut(l_out,r_out,l_dir,r_dir);
   }
+  
   else if(wait_a_time)
   {
-    if (i>=10) i=0; wait_a_time=0;
+    i++;
+    if (i>=5) {i=0; wait_a_time=0;}
   }
   if (DEBUG)
   {  
@@ -280,12 +287,7 @@ ISR(TIMER1_OVF_vect)
     // Serial.println((String) "");
   }
   
-  if (l_out>= 255) l_out = 255;
- //else if (l_out>10 && l_out<90) l_out+=10;
-  if (r_out>= 255) r_out = 255;
-//else if (r_out>10 && r_out<90) r_out+=10;
 
-  pwmOut(l_out,r_out,l_dir,r_dir);
   l_p=0;
   r_p=0;
   TCNT1 = 60535;
