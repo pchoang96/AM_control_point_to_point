@@ -18,20 +18,20 @@ double l_d,r_d;
 //  left pulses, left pre pulses, lef direction,....
 /**--------------pid velocity calculation-------------------------------------------**/
 volatile double  l_error=0.0,l_pre_error=0.0,l_integral=0.0,l_derivative=0.0,l_Ppart=0.0,l_Ipart=0.0,l_Dpart=0.0,l_out,l_set,l_ms,l_pre_out=0;
-double const l_kP = 0.33, l_kI=7.53 ,l_kD = 0.004;
+double const l_kP = 0.33, l_kI=3.53 ,l_kD = 0.004;
 volatile double  r_error=0.0,r_pre_error=0.0,r_integral=0.0,r_derivative=0.0,r_Ppart=0.0,r_Ipart=0.0,r_Dpart=0.0,r_out,r_set,r_ms,r_pre_out=0;
-double const r_kP = 0.33, r_kI=7.53,r_kD = 0.004;
+double const r_kP = 0.33, r_kI=3.53,r_kD = 0.004;
 /**----------------pid position calculator------------------------------------------**/
 /* pid for motor:
  * period time: 20 ms
  * peek time: 400 ms
- * max speed (setting): 15
+ * max speed (setting): value: 25/0.02 = 1250 pulses/s = 981.75 mm/s  <vm = vp*65*pi/wheels_encoder>
+ * smallest speed (runable speed): value: 5/0.02= 250 pulses/s = 196.35mm/s
 */
-
 
 double p_org[]={0.0,0.0,0.0}, p_now[]= {0.0,0.0,0.0}, p_end[]={0.0,0.0,0.0}; //{x,y,phi}
 double lin_error=0.0,lin_pre_error=0.0,lin_integral=0.0,lin_derivative=0.0,lin_Ppart=0.0,lin_Ipart=0.0,lin_Dpart=0.0,lin_out,lin_set;
-double const p_kP =0.33 ,p_kI=6.53,p_kD = 0.004;
+double const p_kP =0.33 ,p_kI=1.53,p_kD = 0.004;
 volatile double ang_error=0.0,ang_pre_error=0.0,ang_integral=0.0,ang_derivative=0.0,ang_Ppart=0.0,ang_Ipart=0.0,ang_Dpart=0.0,ang_out,ang_set;
 volatile bool  pid_type=0; //0 for angle, 1 for linear 
 /**----------------car parameter---------------------**/
@@ -44,7 +44,7 @@ const bool l_motor=1,r_motor=0;
 /**-----------------motion controller----------------------**/
 double w=0.0, linear=0.0;
 int i=0,sample;
-
+bool wait_a_time = 0;
 double PID_output;
 
 void setup() {
@@ -63,6 +63,9 @@ void setup() {
   TCNT1 = 60535; //(12500*4)=50ms
   TIMSK1 |= (1 << TOIE1);                  // Overflow interrupt enable 
   sei();                                  // enable all interrupt
+  p_end[0]=400;
+  p_end[1]=500;
+  p_end[2]=0;
 }
 
 void loop() 
@@ -91,14 +94,7 @@ void loop()
     Serial.println((String) "");
    delay(2000);
    */
-   if (i==10)
-   {
-      cli();
-      pid_position();
-      motion(lin_out,ang_out);
-      l_ms = l_p*inv_sampletime*wheels_diameter*pi/wheels_encoder;  
-      sei();
-   }
+
 }
 
 void encoder_1()
@@ -130,7 +126,7 @@ void calculate_position(double xt,double yt, double pht, double xs, double ys, d
   p_now[2]=pht;
   //update error
   lin_error=linear;
-  ang_error=(w - pht);//*180/pi
+  ang_error=(w-pht)*180/pi;//
 }
 /*------------------------------------------------------------*/
 void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
@@ -167,7 +163,7 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
 /**--------------------------------------------------------------**/
 void pid_position()
 {
-  if(abs(ang_error)>0.09)
+  if(abs(ang_error)>2)
   {
     ang_out = PID_cal(ang_error,ang_pre_error,ang_integral,ang_derivative,ang_Ppart,ang_Ipart,ang_Dpart,p_kP,p_kI,p_kD);
     pid_type = false;
@@ -176,7 +172,7 @@ void pid_position()
       Serial.println((String) "ang_error: " + ang_error);
     }
   }
-  else if (abs(lin_error)>10)
+  else if (abs(lin_error)>4)
   { 
     lin_out = PID_cal(lin_error,lin_pre_error,lin_integral,lin_derivative,lin_Ppart,lin_Ipart,lin_Dpart,p_kP,p_kI,p_kD);
     pid_type = true;
@@ -185,11 +181,17 @@ void pid_position()
       Serial.println((String) "lin_error: " + lin_error);
     }
   }
-  else if (abs(ang_error)<0.09 && abs(lin_error)<10)
+  else if (abs(ang_error)<2 && abs(lin_error)<4)
   { 
-    l_out=0;
-    r_out=0;
+    ang_error=lin_error=0;
+    lin_out=ang_out=0;
+    l_out=r_out=0;
+    l_p=r_p=0;
     pwmOut(0,0,0,0);
+    p_end[0]=p_now[0]=0;
+    p_end[1]=p_now[1]=0;
+    p_now[2] = w = 0;
+    wait_a_time=1;
   }
 }
 /**---------------------------------------------------------------------------------------------------------------**/
@@ -234,34 +236,44 @@ void motion(double lin, double phi )
   else l_dir =c_clkw;      //backhead
   if (r_v>=0) r_dir = clkw;
   else r_dir =c_clkw;
-
+  
   l_set=abs(l_vt);
   r_set=abs(r_vt);
   if (l_set>15) l_set=15;
+  else if (l_set<5 && l_set>0) l_set =5;
   if (r_set>15) r_set=15;
+  else if (r_set<5 && r_set>0) r_set =5;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
   i++;
-  calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
-  l_error= l_set-abs(l_p);
-  r_error= r_set-abs(r_p);
-  if (l_error>=-1 && l_error<=1) l_error=0;
-  if (r_error>=-1 && r_error<=1) r_error=0;
-  l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
-  r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
-
+  if(!wait_a_time)
+  {
+    calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
+    pid_position();
+    motion(lin_out,ang_out);
+   // l_ms = l_p*inv_sampletime*wheels_diameter*pi/wheels_encoder;  
+    l_error= l_set-abs(l_p);
+    r_error= r_set-abs(r_p);
+    if (l_error>=-1 && l_error<=1) l_error=0;
+    if (r_error>=-1 && r_error<=1) r_error=0;
+    l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
+    r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
+  }
+  else if(wait_a_time)
+  {
+    if (i>=10) i=0; wait_a_time=0;
+  }
   if (DEBUG)
   {  
-    //Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]);
+    Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]*180/pi);
     // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
     // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
-    // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
+     //Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
     //Serial.println((String) "l_vt: "+ l_vt + " r_vt: " +r_vt);
     // Serial.println((String) " l_ms : "+ l_ms );
-    Serial.println((String)  "l_p: "+l_p + " r_p: "+  r_p);
     // Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
     // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
     //Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
@@ -269,10 +281,9 @@ ISR(TIMER1_OVF_vect)
   }
   
   if (l_out>= 255) l_out = 255;
-  //else if (l_out>10 && l_out<90) l_out+=10;
+ //else if (l_out>10 && l_out<90) l_out+=10;
   if (r_out>= 255) r_out = 255;
- // else if (r_out>10 && r_out<90) r_out+=10;
-
+//else if (r_out>10 && r_out<90) r_out+=10;
 
   pwmOut(l_out,r_out,l_dir,r_dir);
   l_p=0;
