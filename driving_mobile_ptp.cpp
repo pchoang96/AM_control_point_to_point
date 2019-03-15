@@ -1,4 +1,3 @@
-
 #define clkw        0
 #define c_clkw      1
 #define encodPinA1  3
@@ -37,7 +36,7 @@ volatile bool  pid_type=0; //0 for angle, 1 for linear
 /**----------------car parameter---------------------**/
 const double pi=3.1415;
 const double sampletime = 0.02, inv_sampletime = 1/sampletime;
-const double wheels_distance = 207, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 260;// mm
+const double wheels_distance = 210, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 200;// mm
 const double wheel_ticLength = wheels_diameter*pi/wheels_encoder;//0.23mm
 const double wheel_ticAngle = 2*pi/(wheels_distance*pi/wheel_ticLength);//0.0022 rad
 const bool l_motor=1,r_motor=0;
@@ -148,13 +147,13 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
     analogWrite(M2_p,Lpwm); digitalWrite(M2_l,0) ;  
   }
 
-  else if(Ldir==clkw && Rdir==c_clkw)
+  else if(Ldir==c_clkw && Rdir==clkw)
   {
     analogWrite(M1_p,0-Rpwm); digitalWrite(M1_l,1);
     analogWrite(M2_p,Lpwm); digitalWrite(M2_l,0);  
   }
 
-  else if(Ldir==c_clkw && Rdir==clkw)
+  else if(Ldir==clkw && Rdir==c_clkw)
   {
     analogWrite(M1_p,Rpwm); digitalWrite(M1_l,0);
     analogWrite(M2_p,0-Lpwm); digitalWrite(M2_l,1);
@@ -163,7 +162,7 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
 /**--------------------------------------------------------------**/
 void pid_position()
 {
-  if(abs(ang_error)>2)
+  if(abs(ang_error)>3)
   {
     ang_out = PID_cal(ang_error,ang_pre_error,ang_integral,ang_derivative,ang_Ppart,ang_Ipart,ang_Dpart,p_kP,p_kI,p_kD);
     pid_type = false;
@@ -183,7 +182,6 @@ void pid_position()
   }
   else if (abs(ang_error)<2 && abs(lin_error)<4)
   { 
-    ang_error=lin_error=0;
     lin_out=ang_out=0;
     l_out=r_out=0;
     l_p=r_p=0;
@@ -232,23 +230,23 @@ void motion(double lin, double phi )
   l_vt = l_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
   r_vt = r_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
 
-  if (l_v>=0) l_dir = clkw;//go ahead
+  if (l_vt>=0) l_dir = clkw;//go ahead
   else l_dir =c_clkw;      //backhead
-  if (r_v>=0) r_dir = clkw;
+  if (r_vt>=0) r_dir = clkw;
   else r_dir =c_clkw;
   
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>20) l_set=20;
-  else if (l_set<6 && l_set>0) l_set =6;
+  if (l_set>15) l_set=15;
+  else if (l_set<5 && l_set>0) l_set =5;
   if (r_set>20) r_set=20;
-  else if (r_set<6 && r_set>0) r_set =6;
+  else if (r_set<5 && r_set>0) r_set =5;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
-  
+ 
   if(!wait_a_time)
   {
     calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
@@ -271,23 +269,23 @@ ISR(TIMER1_OVF_vect)
   else if(wait_a_time)
   {
     i++;
-    if (i>=5) {i=0; wait_a_time=0;}
+    if (i>=10) {i=0; wait_a_time=0;}
   }
   if (DEBUG)
   {  
     Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]*180/pi);
     // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
-    // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
-     //Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
-    //Serial.println((String) "l_vt: "+ l_vt + " r_vt: " +r_vt);
+     //Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
+   // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
+     // Serial.println((String) "l_v:   "+ l_v + " r_v:  " +r_v);
+    Serial.println((String) "l_vt:   "+ l_vt + " r_vt:  " +r_vt);
+     //Serial.println((String) "l_dir: " + l_dir+ ";      r_dir: " + r_dir);
     // Serial.println((String) " l_ms : "+ l_ms );
-    // Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir);
-    // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir);
-    //Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
+   //  Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir );
+  // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir );
+   // Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
     // Serial.println((String) "");
   }
-  
-
   l_p=0;
   r_p=0;
   TCNT1 = 60535;
