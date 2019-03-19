@@ -21,7 +21,8 @@ double const l_kP = 0.33, l_kI=3.53 ,l_kD = 0.004;
 volatile double  r_error=0.0,r_pre_error=0.0,r_integral=0.0,r_derivative=0.0,r_Ppart=0.0,r_Ipart=0.0,r_Dpart=0.0,r_out,r_set,r_ms,r_pre_out=0;
 double const r_kP = 0.33, r_kI=3.53,r_kD = 0.004;
 /**----------------pid position calculator------------------------------------------**/
-/* pid for motor:
+/* 
+ * pid for motor:
  * period time: 20 ms
  * peek time: 400 ms
  * max speed (setting): value: 25/0.02 = 1250 pulses/s = 981.75 mm/s  <vm = vp*65*pi/wheels_encoder>
@@ -30,21 +31,22 @@ double const r_kP = 0.33, r_kI=3.53,r_kD = 0.004;
 
 double p_org[]={0.0,0.0,0.0}, p_now[]= {0.0,0.0,0.0}, p_end[]={0.0,0.0,0.0}; //{x,y,phi}
 double lin_error=0.0,lin_pre_error=0.0,lin_integral=0.0,lin_derivative=0.0,lin_Ppart=0.0,lin_Ipart=0.0,lin_Dpart=0.0,lin_out,lin_set;
-double const p_kP =0.33 ,p_kI=1.53,p_kD = 0.004;
+double const p_kP =3.33 ,p_kI=5.53,p_kD = 0.004;
 volatile double ang_error=0.0,ang_pre_error=0.0,ang_integral=0.0,ang_derivative=0.0,ang_Ppart=0.0,ang_Ipart=0.0,ang_Dpart=0.0,ang_out,ang_set;
 volatile bool  pid_type=0; //0 for angle, 1 for linear 
 /**----------------car parameter---------------------**/
 const double pi=3.1415;
 const double sampletime = 0.02, inv_sampletime = 1/sampletime;
-const double wheels_distance = 210, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 200;// mm
+const double wheels_distance = 200, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 160;// mm
 const double wheel_ticLength = wheels_diameter*pi/wheels_encoder;//0.23mm
-const double wheel_ticAngle = 2*pi/(wheels_distance*pi/wheel_ticLength);//0.0022 rad
+//const double wheel_ticAngle = 2*pi/(wheels_distance*pi/wheel_ticLength);//0.0022 rad
 const bool l_motor=1,r_motor=0;
 /**-----------------motion controller----------------------**/
 double w=0.0, linear=0.0;
 int i=0,sample;
 bool wait_a_time = 0;
-double PID_output;
+bool ang_pid=0,lin_pid=0;
+//double PID_output;
 
 void setup() {
   Serial.begin(9600);  
@@ -62,8 +64,9 @@ void setup() {
   TCNT1 = 60535; //(12500*4)=50ms
   TIMSK1 |= (1 << TOIE1);                  // Overflow interrupt enable 
   sei();                                  // enable all interrupt
-  p_end[0]=400;
-  p_end[1]=500;
+  
+  p_end[0]=0;
+  p_end[1]=400;
   p_end[2]=0;
 }
 
@@ -107,27 +110,7 @@ void encoder_2()
   if(!r_dir) r_p ++;
   else r_p--;
 }
-/*------------------------------------------------------------*/
-void calculate_position(double xt,double yt, double pht, double xs, double ys, double phs)
-{
-  l_d = l_p*pi*wheels_diameter/wheels_encoder;
-  r_d = r_p*pi*wheels_diameter/wheels_encoder;
-  double c_d = (l_d + r_d )/2;
-  pht = pht + (r_d-l_d)/wheels_distance;
-  xt = xt+c_d*cos(pht);
-  yt = yt+c_d*sin(pht);
-
-  w=atan2((ys-yt),(xs-xt));
-  linear=sqrt((xs-xt)*(xs-xt)+(ys-yt)*(ys-yt));
-  //update position
-  p_now[0]=xt;
-  p_now[1]=yt;
-  p_now[2]=pht;
-  //update error
-  lin_error=linear;
-  ang_error=(w-pht)*180/pi;//
-}
-/*------------------------------------------------------------*/
+/**--------------------------------------------------------------**/
 void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
 {
   if(Lpwm==0 && Rpwm==0)
@@ -159,11 +142,39 @@ void pwmOut(int Lpwm, int Rpwm, bool Ldir, bool Rdir)
     analogWrite(M2_p,0-Lpwm); digitalWrite(M2_l,1);
   }  
 }
-/**--------------------------------------------------------------**/
+
+/*------------------------------------------------------------*/
+void calculate_position(double xt,double yt, double pht, double xs, double ys, double phs)
+{
+  l_d = l_p*wheel_ticLength;
+  r_d = r_p*wheel_ticLength;
+  double c_d = (l_d + r_d )/2;
+  
+  xt += c_d*cos(pht);
+  yt += c_d*sin(pht);
+  pht += atan2((r_d-l_d),wheels_distance);
+
+  w=atan2((ys-yt),(xs-xt));
+  linear=sqrt((xs-xt)*(xs-xt)+(ys-yt)*(ys-yt));
+  //update position
+  p_now[0]=xt;
+  p_now[1]=yt;
+  p_now[2]=pht;
+  //update error
+  lin_error=linear;
+  ang_error=(w-pht)*180/pi;//
+  if (ang_error>180) {Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]*180/pi);}
+}
+/*------------------------------------------------------------*/
 void pid_position()
 {
-  if(abs(ang_error)>3)
+  if(abs(ang_error)>=170 && abs(lin_error)<50) {lin_pid=1; ang_error=0;}
+  else lin_pid=0;
+  
+  if(abs(ang_error)>5)
   {
+    if (ang_error<0) {ang_error = -ang_error; ang_pid =1;}
+    else {ang_pid = 0;}
     ang_out = PID_cal(ang_error,ang_pre_error,ang_integral,ang_derivative,ang_Ppart,ang_Ipart,ang_Dpart,p_kP,p_kI,p_kD);
     pid_type = false;
     if (DEBUG)
@@ -171,7 +182,7 @@ void pid_position()
       Serial.println((String) "ang_error: " + ang_error);
     }
   }
-  else if (abs(lin_error)>4)
+  else if (abs(lin_error)>10)
   { 
     lin_out = PID_cal(lin_error,lin_pre_error,lin_integral,lin_derivative,lin_Ppart,lin_Ipart,lin_Dpart,p_kP,p_kI,p_kD);
     pid_type = true;
@@ -180,17 +191,16 @@ void pid_position()
       Serial.println((String) "lin_error: " + lin_error);
     }
   }
-  else if (abs(ang_error)<2 && abs(lin_error)<4)
+/*  if (abs(ang_error)<5 && abs(lin_error)<10)
   { 
-    lin_out=ang_out=0;
-    l_out=r_out=0;
-    l_p=r_p=0;
+    ang_error=0;
+    lin_error=0;
     pwmOut(0,0,0,0);
-    p_end[0]=p_now[0]=0;
-    p_end[1]=p_now[1]=0;
-    p_now[2] = w = 0;
-    wait_a_time=1;
-  }
+    p_now[0]= p_now[1]=0;
+    p_end[0] =0;
+    p_end[1]= 0;
+    //wait_a_time=1;
+  }*/
 }
 /**---------------------------------------------------------------------------------------------------------------**/
 //PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
@@ -217,15 +227,30 @@ double PID_cal(double error,double pre_error,double _integral,double _derivative
 void motion(double lin, double phi )
 {
   //linear
-  if(pid_type) l_v=r_v=lin;
-  else {r_v = phi*wheels_radius/2.0; l_v = -r_v;}
-  /*
-  else //curve moving
+  if(pid_type) 
   {
-    l_v = lin - phi*wheels_radius/2.0;
-    r_v = lin + phi*wheels_radius/2.0;
+     if (!lin_pid) l_v = r_v = lin;
+     else l_v = r_v = -lin;
   }
-  */
+  else if (!pid_type)
+  {
+    if (!ang_pid)
+    {
+      l_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
+      r_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
+    }
+    else
+    {
+      r_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
+      l_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
+    }
+  } 
+ /* else //curve moving
+  {
+    l_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
+    r_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
+  }
+ */
 //to l_vt and r_vt
   l_vt = l_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
   r_vt = r_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
@@ -237,17 +262,22 @@ void motion(double lin, double phi )
   
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>15) l_set=15;
-  else if (l_set<5 && l_set>0) l_set =5;
-  if (r_set>20) r_set=20;
-  else if (r_set<5 && r_set>0) r_set =5;
+  if (l_set>30) l_set=30;
+//  else if (l_set<5 && l_set>1) l_set=5 ;
+  if (r_set>30) r_set=30;
+ // else if (r_set<5 && r_set>1) r_set =5;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
 ISR(TIMER1_OVF_vect) 
 {
- 
-  if(!wait_a_time)
+  if(wait_a_time)
+  {
+    ang_error=lin_error=0;
+    i++;
+    if (i>=10) {i=0; wait_a_time=0;}
+  }
+  else if(!wait_a_time)
   {
     calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
     pid_position();
@@ -258,33 +288,33 @@ ISR(TIMER1_OVF_vect)
     if (l_error>=-1 && l_error<=1) l_error=0;
     if (r_error>=-1 && r_error<=1) r_error=0;
     l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
+    r_out = l_out + 5;
     r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
     if (l_out>= 255) l_out = 255;
  //else if (l_out>10 && l_out<90) l_out+=10;
   if (r_out>= 255) r_out = 255;
 //else if (r_out>10 && r_out<90) r_out+=10;
+ //t if (abs(ang_error)<5 && abs(lin_error)<10) {l_out=r_out=l_dir=r_dir=0;}
   pwmOut(l_out,r_out,l_dir,r_dir);
   }
   
-  else if(wait_a_time)
-  {
-    i++;
-    if (i>=10) {i=0; wait_a_time=0;}
-  }
+
+
   if (DEBUG)
-  {  
+  {    
+ //   delay(10);
     Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]*180/pi);
-    // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
-     //Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
+   // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
+  // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
    // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
-     // Serial.println((String) "l_v:   "+ l_v + " r_v:  " +r_v);
-    Serial.println((String) "l_vt:   "+ l_vt + " r_vt:  " +r_vt);
-     //Serial.println((String) "l_dir: " + l_dir+ ";      r_dir: " + r_dir);
-    // Serial.println((String) " l_ms : "+ l_ms );
-   //  Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir );
-  // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir );
-   // Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
-    // Serial.println((String) "");
+   // Serial.println((String) "l_v:   "+ l_v + " r_v:  " +r_v);
+   //Serial.println((String) "l_vt:   "+ l_vt + " r_vt:  " +r_vt);
+   // Serial.println((String) "l_dir: " + l_dir+ ";      r_dir: " + r_dir);
+   // Serial.println((String) " l_ms : "+ l_ms );
+   // Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir );
+   // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir );
+    Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
+   // Serial.println((String) "");
   }
   l_p=0;
   r_p=0;
