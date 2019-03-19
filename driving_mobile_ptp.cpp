@@ -65,7 +65,7 @@ void setup() {
   TIMSK1 |= (1 << TOIE1);                  // Overflow interrupt enable 
   sei();                                  // enable all interrupt
   
-  p_end[0]=0;
+  p_end[0]=300;
   p_end[1]=400;
   p_end[2]=0;
 }
@@ -191,16 +191,14 @@ void pid_position()
       Serial.println((String) "lin_error: " + lin_error);
     }
   }
-/*  if (abs(ang_error)<5 && abs(lin_error)<10)
+ if (abs(ang_error)<5 && abs(lin_error)<10)
   { 
-    ang_error=0;
-    lin_error=0;
     pwmOut(0,0,0,0);
-    p_now[0]= p_now[1]=0;
+    p_now[0]= p_now[1]= p_now[2]=0;
     p_end[0] =0;
     p_end[1]= 0;
-    //wait_a_time=1;
-  }*/
+//    wait_a_time=1;
+  }
 }
 /**---------------------------------------------------------------------------------------------------------------**/
 //PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
@@ -262,10 +260,10 @@ void motion(double lin, double phi )
   
   l_set=abs(l_vt);
   r_set=abs(r_vt);
-  if (l_set>30) l_set=30;
-//  else if (l_set<5 && l_set>1) l_set=5 ;
+  if (l_set>20) l_set=20;
+  else if (l_set<5 && l_set>0.5) l_set=5 ;
   if (r_set>30) r_set=30;
- // else if (r_set<5 && r_set>1) r_set =5;
+  else if (r_set<5 && r_set>0.5) r_set =5;
 }
 /*------------------------------------------------------------*/
 /**--------------------------------------------------------------**/
@@ -273,9 +271,11 @@ ISR(TIMER1_OVF_vect)
 {
   if(wait_a_time)
   {
-    ang_error=lin_error=0;
     i++;
-    if (i>=10) {i=0; wait_a_time=0;}
+    if (i>=10) 
+    {
+      i=0; wait_a_time=0;
+    }
   }
   else if(!wait_a_time)
   {
@@ -294,7 +294,7 @@ ISR(TIMER1_OVF_vect)
  //else if (l_out>10 && l_out<90) l_out+=10;
   if (r_out>= 255) r_out = 255;
 //else if (r_out>10 && r_out<90) r_out+=10;
- //t if (abs(ang_error)<5 && abs(lin_error)<10) {l_out=r_out=l_dir=r_dir=0;}
+  if (abs(ang_error)<5 && abs(lin_error)<10) {l_out=r_out=l_dir=r_dir=0;}
   pwmOut(l_out,r_out,l_dir,r_dir);
   }
   
@@ -302,10 +302,10 @@ ISR(TIMER1_OVF_vect)
 
   if (DEBUG)
   {    
- //   delay(10);
+    delay(10);
     Serial.println((String)  "Position:  " + "x: " +p_now[0]+ "  y: " +p_now[1]+ "  phi: " +p_now[2]*180/pi);
-   // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
-  // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error);
+  // Serial.println((String)  p_now[0]+ " " +p_now[1]+ " " +p_now[2]);
+  // Serial.println((String)  "lin_error: "+ lin_error + "  ang_error: " + ang_error + "/ w: " + w + " linear: "+ linear );
    // Serial.println ((String) "l_p: "+l_p+" r_p: "+r_p);
    // Serial.println((String) "l_v:   "+ l_v + " r_v:  " +r_v);
    //Serial.println((String) "l_vt:   "+ l_vt + " r_vt:  " +r_vt);
@@ -313,7 +313,7 @@ ISR(TIMER1_OVF_vect)
    // Serial.println((String) " l_ms : "+ l_ms );
    // Serial.println((String) "l_out: "+ l_out + " l_dir: " + l_dir );
    // Serial.println((String) "r_out: " +r_out + " r_dir: " + r_dir );
-    Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
+   // Serial.println((String) "r_out: " +r_out + "  l_out: "+ l_out );
    // Serial.println((String) "");
   }
   l_p=0;
