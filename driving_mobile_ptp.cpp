@@ -170,7 +170,6 @@ void pid_position()
 {
   if(abs(ang_error)>=170 && abs(lin_error)<50) {lin_pid=1; ang_error=0;}
   else lin_pid=0;
-  
   if(abs(ang_error)>5)
   {
     if (ang_error<0) {ang_error = -ang_error; ang_pid =1;}
@@ -279,6 +278,7 @@ ISR(TIMER1_OVF_vect)
   }
   else if(!wait_a_time)
   {
+    if (abs(l_p) == abs (r_p)) { buff = abs( l_out-r_out ); }
     calculate_position(p_now[0],p_now[1],p_now[2],p_end[0],p_end[1],p_end[2]);
     pid_position();
     motion(lin_out,ang_out);
@@ -288,7 +288,7 @@ ISR(TIMER1_OVF_vect)
     if (l_error>=-1 && l_error<=1) l_error=0;
     if (r_error>=-1 && r_error<=1) r_error=0;
     l_out += PID_cal(l_error,l_pre_error,l_integral,l_derivative,l_Ppart,l_Ipart,l_Dpart,l_kP,l_kI,l_kD);
-    r_out = l_out + 5;
+    r_out = l_out + buff;
     r_out += PID_cal(r_error,r_pre_error,r_integral,r_derivative,r_Ppart,r_Ipart,r_Dpart,r_kP,r_kI,r_kD);
     if (l_out>= 255) l_out = 255;
  //else if (l_out>10 && l_out<90) l_out+=10;
