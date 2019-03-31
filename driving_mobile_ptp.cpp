@@ -37,7 +37,7 @@ volatile bool  pid_type=0; //0 for angle, 1 for linear
 /**----------------car parameter---------------------**/
 const double pi=3.1415;
 const double sampletime = 0.02, inv_sampletime = 1/sampletime;
-const double wheels_distance = 200, wheels_radius = 32.5, wheels_diameter=65,wheels_encoder = 160;// mm
+const double wheels_distance = 200, wheels_radius = 31, wheels_diameter=62,wheels_encoder = 480;// mm
 const double wheel_ticLength = wheels_diameter*pi/wheels_encoder;//0.23mm
 //const double wheel_ticAngle = 2*pi/(wheels_distance*pi/wheel_ticLength);//0.0022 rad
 const bool l_motor=1,r_motor=0;
@@ -234,21 +234,15 @@ void motion(double lin, double phi )
   {
     if (!ang_pid)
     {
-      l_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
-      r_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
+      l_v = (2*lin - phi*wheels_distance)/(2.0);
+      r_v = (2*lin + phi*wheels_distance)/(2.0);
     }
     else
     {
-      r_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
-      l_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
+      r_v = (2*lin - phi*wheels_distance)/(2.0);
+      l_v = (2*lin + phi*wheels_distance)/(2.0;
     }
   } 
- /* else //curve moving
-  {
-    l_v = (2*lin - phi*wheels_distance)/(2.0*wheels_radius);
-    r_v = (2*lin + phi*wheels_distance)/(2.0*wheels_radius);
-  }
- */
 //to l_vt and r_vt
   l_vt = l_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
   r_vt = r_v*(wheels_encoder/(pi*wheels_diameter))*sampletime;
